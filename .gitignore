@@ -1,5 +1,7 @@
 # Ignore the .env file to prevent sensitive credentials from being committed
 .env
+.env.dev
+.env.prod
 
 HELP.md
 target/
