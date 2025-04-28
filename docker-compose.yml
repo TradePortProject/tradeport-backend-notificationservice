@@ -1,5 +1,6 @@
 services:
   notificationservice:
+    image: notificationservice
     build: .  # Assuming your Dockerfile is in the same directory as docker-compose.yml
     container_name: notificationservice
     ports:
