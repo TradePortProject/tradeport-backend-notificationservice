@@ -73,7 +73,7 @@ jobs:
       - name: Log In to Docker Hub
         uses: docker/login-action@v3 # Use v3 or latest stable
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and Push Docker Image
