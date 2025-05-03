@@ -78,6 +78,6 @@ jobs:
         with:
           context: . # Assumes Dockerfile is in the root of the repository checkout
           # If your Dockerfile is in a subdirectory (like the original example), uncomment and adjust path:
-          # file: ./tradeport-backend-notificationservice/Dockerfile
+          file: ./tradeport-backend-notificationservice/Dockerfile
           push: true
           tags: prabhulalithakrishnan/notificationservice:latest # Adjust tag as needed
