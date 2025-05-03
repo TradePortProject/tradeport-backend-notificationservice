@@ -1,5 +1,13 @@
 package com.tradeport.notificationservice.messaging.strategy;
 
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
+import com.amazonaws.services.simpleemail.AmazonSimpleEmailServiceClientBuilder;
+import com.amazonaws.services.simpleemail.model.*;
+
+import com.amazonaws.services.simpleemail.model.Message;
 import com.tradeport.notificationservice.model.NotificationTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,10 +19,15 @@ import javax.mail.internet.*;
 import java.util.Date;
 import java.util.Properties;
 
+
 @Component
 public class EmailStrategy implements MessagingStrategy {
+    private static final Logger logger = LoggerFactory.getLogger(MessagingStrategy.class); // Use the correct class for the logger
+    @Value("${aws.access.key}")
+    private String aws_access_key;
 
-    private static final Logger logger = LoggerFactory.getLogger(EmailStrategy.class); // Use the correct class for the logger
+    @Value("${aws.secret.key}")
+    private String aws_secret_key;
 
     @Value("${mail.username}")
     private String username;
@@ -34,45 +47,46 @@ public class EmailStrategy implements MessagingStrategy {
     @Value("${mail.smtp.starttls.enable:true}") // Provide default value if not configured
     private boolean starttlsEnable;
 
-    @Value("${mail.recipient}")
-    private String recipientEmail;
+    //@Value("${mail.recipient}")
+    //private String recipientEmail;
 
-    @Override
+    @Value("${mail.fromemail}")
+    private String fromEmail;
+
+
+     @Override
     public void sendMessage(NotificationTO message) {
-        logger.info("Sending email with message: {}", message);
-        // SMTP server configuration
-        Properties props = new Properties();
-        props.put("mail.smtp.auth", String.valueOf(smtpAuth));
-        props.put("mail.smtp.starttls.enable", String.valueOf(starttlsEnable));
-        props.put("mail.smtp.host", smtpHost);
-        props.put("mail.smtp.port", smtpPort);
-
-        Session session = Session.getInstance(props, new Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(username, password);
-            }
-        });
 
         try {
-            Message emailMessage = new MimeMessage(session);
-            emailMessage.setFrom(new InternetAddress(username));
-            emailMessage.setRecipients(
-                    Message.RecipientType.TO,
-                    InternetAddress.parse(message.getRecipientEmail())
-            );
-            emailMessage.setSubject(message.getSubject());
-            emailMessage.setText(message.getMessage());
+            // Initialize AWS Credentials
+            BasicAWSCredentials awsCredentials = new BasicAWSCredentials(aws_access_key, aws_secret_key);
 
-            Transport.send(emailMessage);
-            logger.info("Email sent successfully!");
-            message.setRecipientEmail(message.getRecipientEmail());
-            message.setFromEmail(username);
+            // Create SES Client
+            AmazonSimpleEmailService sesClient = AmazonSimpleEmailServiceClientBuilder.standard()
+                    .withCredentials(new AWSStaticCredentialsProvider(awsCredentials))
+                    .withRegion(Regions.AP_SOUTHEAST_1) // Change to your AWS region
+                    .build();
+
+            // Create Email Request
+            SendEmailRequest request = new SendEmailRequest()
+                    .withSource(fromEmail)
+                    .withDestination(new Destination().withToAddresses(message.getRecipientEmail()))
+                    .withMessage(new Message()
+                            .withSubject(new Content().withCharset("UTF-8").withData(message.getSubject()))
+                            .withBody(new Body().withText(new Content().withCharset("UTF-8").withData(message.getMessage()))));
+
+            // Send Email
+            sesClient.sendEmail(request);
             message.setSentTime(new Date());
+            message.setFromEmail(fromEmail);
             message.setEmailSend(true);
-        } catch (MessagingException e) {
+            logger.info("Email sent successfully!");
+
+        } catch (Exception e) {
             message.setRecipientEmail(message.getRecipientEmail()); // Set recipient even if sending fails
             logger.error("Error sending email message: {}", e.getMessage(), e);
         }
     }
+
+
 }
