@@ -1,60 +1,70 @@
 package com.tradeport.notificationservice.messaging.strategy;
 
+import com.amazonaws.services.simpleemail.AmazonSimpleEmailService;
+import com.amazonaws.services.simpleemail.model.SendEmailRequest;
 import com.tradeport.notificationservice.model.NotificationTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import javax.mail.MessagingException;
-import javax.mail.Transport;
-import java.util.Date;
+import org.springframework.test.util.ReflectionTestUtils;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import java.util.Date;
+
+import static org.junit.jupiter.api.Assertions.*;
+
 @ExtendWith(MockitoExtension.class)
-class EmailStrategyTest {
+public class EmailStrategyTest {
+
+    @Mock
+    private AmazonSimpleEmailService sesClient;
 
     @InjectMocks
     private EmailStrategy emailStrategy;
-
-    @Mock
-    private Transport transport; // Mock Transport to prevent real email sending
 
     private NotificationTO notification;
 
     @BeforeEach
     void setUp() {
+        // Initialize notification object with test data
         notification = new NotificationTO();
-        notification.setSubject("Test Subject");
-        notification.setMessage("Test Message");
-        notification.setCreatedOn(new Date());
         notification.setRecipientEmail("test@example.com");
+        notification.setSubject("Test Subject");
+        notification.setMessage("Test email message");
+
+        // Inject values into EmailStrategy
+        ReflectionTestUtils.setField(emailStrategy, "fromEmail", "noreply@tradeport.com");
     }
 
     @Test
-    void testSendMessage_Success() throws Exception {
-        // Call the method under test
+    void testSendMessage_Success() {
+        // Mock SES email sending
+        doNothing().when(sesClient).sendEmail(any(SendEmailRequest.class));
+
+        // Execute method
         emailStrategy.sendMessage(notification);
 
-        // Verify the email properties were correctly set
-        verify(transport, times(1)).send(any()); // Ensure Transport.send() was called once
-
-        // Ensure email metadata is correctly updated
-        assert notification.isEmailSend();
-        assert notification.getSentTime() != null;
-        assert notification.getRecipientEmail().equals("test@example.com");
+        // Assertions
+        assertEquals("noreply@tradeport.com", notification.getFromEmail());
+        assertNotNull(notification.getSentTime());
+        assertTrue(notification.isEmailSend());
     }
 
     @Test
-    void testSendMessage_Failure() throws MessagingException {
-        // Simulate a failure scenario
-        doThrow(new RuntimeException("SMTP error")).when(transport).send(any());
+    void testSendMessage_Failure() {
+        // Mock SES failure scenario
+        doThrow(new RuntimeException("SES Error")).when(sesClient).sendEmail(any(SendEmailRequest.class));
 
+        // Execute method
         emailStrategy.sendMessage(notification);
 
-        // Ensure failure scenario gets logged
-        assert notification.getRecipientEmail().equals("SMTP error");
+        // Assertions
+        assertEquals("test@example.com", notification.getRecipientEmail()); // Ensures recipient is still set
+        assertFalse(notification.isEmailSend()); // Should be false due to failure
     }
 }
