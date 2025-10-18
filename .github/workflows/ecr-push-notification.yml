@@ -1,0 +1,87 @@
+name: Build, Analyze, and Push DBWriter Service to ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_cleanup:
+        description: 'Force ECR cleanup even if no changes'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  build_and_push:
+    name: Build and Push DBWriter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Up Java and Maven
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Build with Maven
+        run: mvn clean install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and Push Docker Image
+        run: |
+          BUILD_NUMBER=${GITHUB_RUN_NUMBER}
+          IMAGE_TAG="v1.0.${BUILD_NUMBER}"
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY=${{ secrets.ECR_REPO_DBWRITER }}
+          echo "🏗️ ECR_REGISTRY: $ECR_REGISTRY"
+          echo "🏗️ ECR_REPOSITORY: $ECR_REPOSITORY"
+          
+          echo "🏗️ Building image: $IMAGE_TAG"
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Clean up old ECR images (keep last 2)
+        if: success() && github.event.inputs.force_cleanup == 'true'
+        run: |
+          ECR_REPOSITORY=${{ secrets.ECR_REPO_DBWRITER }}
+          echo "🧹 Cleaning up old images in $ECR_REPOSITORY..."
+
+          TOTAL_IMAGES=$(aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --query 'length(imageDetails)' \
+            --output text)
+
+          if [ "$TOTAL_IMAGES" -gt 2 ]; then
+            IMAGES_TO_DELETE=$(aws ecr describe-images \
+              --repository-name $ECR_REPOSITORY \
+              --query 'sort_by(imageDetails,& imagePushedAt)[:-2].[imageDigest]' \
+              --output text)
+
+            echo "$IMAGES_TO_DELETE" | while read -r digest; do
+              if [ ! -z "$digest" ]; then
+                aws ecr batch-delete-image \
+                  --repository-name $ECR_REPOSITORY \
+                  --image-ids imageDigest=$digest
+                echo "✅ Deleted image: ${digest:0:12}"
+              fi
+            done
+          else
+            echo "✅ No cleanup needed"
+          fi
