@@ -1,4 +1,4 @@
-name: Build, Analyze, and Push DBWriter Service to ECR
+name: Build, Analyze, and Push Notification Service to ECR
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   build_and_push:
-    name: Build and Push DBWriter
+    name: Build and Push Notification
     runs-on: ubuntu-latest
 
     steps:
@@ -46,7 +46,7 @@ jobs:
           BUILD_NUMBER=${GITHUB_RUN_NUMBER}
           IMAGE_TAG="v1.0.${BUILD_NUMBER}"
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY=${{ secrets.ECR_REPO_DBWRITER }}
+          ECR_REPOSITORY=${{ secrets.ECR_REPO_NOTIFICATION }}
           echo "🏗️ ECR_REGISTRY: $ECR_REGISTRY"
           echo "🏗️ ECR_REPOSITORY: $ECR_REPOSITORY"
           
@@ -60,7 +60,7 @@ jobs:
       - name: Clean up old ECR images (keep last 2)
         if: success() && github.event.inputs.force_cleanup == 'true'
         run: |
-          ECR_REPOSITORY=${{ secrets.ECR_REPO_DBWRITER }}
+          ECR_REPOSITORY=${{ secrets.ECR_REPO_NOTIFICATION }}
           echo "🧹 Cleaning up old images in $ECR_REPOSITORY..."
 
           TOTAL_IMAGES=$(aws ecr describe-images \
