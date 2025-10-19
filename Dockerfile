@@ -11,7 +11,7 @@ COPY target/*.jar app.jar
 EXPOSE 9098
 
 # Define environment variables that your application might need
-ENV SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka.backend-namespace-ec2.svc.cluster.local:9092
+ENV SPRING_KAFKA_BOOTSTRAP_SERVERS=my-cluster-kafka-bootstrap.backend-namespace-ec2.svc.cluster.local:9092
 ENV KAFKA_TOPIC=your_kafka_topic
 
 # Define the command to run the Spring Boot application
